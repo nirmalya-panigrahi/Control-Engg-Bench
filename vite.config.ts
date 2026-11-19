@@ -9,7 +9,7 @@ const basePath = process.env.VITE_BASE_PATH || (repoName ? `/${repoName}/` : '/'
 
 export default defineConfig(() => {
   return {
-    base: basePath,
+    base: '/Control-Engg-Bench/',
     plugins: [
       react(),
       tailwindcss(),
