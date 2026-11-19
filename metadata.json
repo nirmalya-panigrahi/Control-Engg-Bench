@@ -1,0 +1,6 @@
+{
+  "name": "VectorBench",
+  "description": "Interactive Electrical & Control Engineering Workbench for transfer functions, stability maps, AC phasors, power capability, motor torque-speed, transformer efficiency, and step response analysis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
