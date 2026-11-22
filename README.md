@@ -27,6 +27,7 @@ Every instrument accepts live numeric parameter inputs, evaluates deterministic 
 | 08 | **Torque–Speed Curve** | $V_{LL}$, $f$, motor poles, $R_1, X_1, R_2, X_2$, rated slip | Starting torque, breakdown torque $T_{\max}$ & slip, rated torque, speed regulation % |
 | 09 | **Transformer Efficiency** | Rating kVA, core loss $P_i$, copper loss $P_{cu,\text{FL}}$, $\cos\phi$, load $x$ | $\eta(x)$ curve, optimal load $\sqrt{P_i / P_{cu,\text{FL}}}$, $\eta_{\max}$, operating losses |
 | 10 | **2nd-Order Step Response** | Damping ratio $\zeta$, natural frequency $\omega_n$, amplitude $A$ | Analytical $y(t)$ across all 4 regimes, decay envelope, $\%OS$, $t_r$, $t_p$, $t_s$ |
+| 11 | **CSV Step ID & PID Auto-Tuner** | Step-response CSV $(t, y [, u])$, $\Delta u$, IMC $\lambda$, PID gains | FOPDT fit ($K_p, \tau, \theta, R^2$), ZN/IMC/Cohen–Coon/SIMC/AMIGO gains, closed-loop sim |
 
 ---
 
@@ -34,14 +35,15 @@ Every instrument accepts live numeric parameter inputs, evaluates deterministic 
 
 ```mermaid
 flowchart LR
-  UI["React Workbench Shell (App.tsx)"] --> Inst["Domain Benches (Frequency / s-Plane / AC-Power / Machines-Time)"]
-  Inst --> Inputs["NumericField & ComplexListEditor"]
+  UI["React Workbench Shell (App.tsx)"] --> Inst["Domain Benches (Frequency / s-Plane / AC-Power / Machines-Time / PID Tuner)"]
+  Inst --> Inputs["NumericField & ComplexListEditor & CSV Upload"]
   Inst --> Solvers["Pure Numerical Solvers (src/math/*)"]
   Solvers --> Complex["complex.ts (Aberth-Ehrlich Root Solver)"]
   Solvers --> Freq["controlFrequency.ts"]
   Solvers --> SPlane["controlSPlane.ts"]
   Solvers --> ACPower["acAndPower.ts"]
   Solvers --> Mach["machinesAndTime.ts"]
+  Solvers --> Pid["pidTuner.ts (FOPDT Fit & Closed-Loop Sim)"]
   Inst --> Plot["EngineeringPlot SVG Canvas (Crosshair + Fine-Print Tooltips)"]
   Inst --> Readout["MetricsGrid & DataTable + CSV Export"]
 ```

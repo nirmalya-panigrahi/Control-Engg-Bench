@@ -8,7 +8,8 @@ export type InstrumentId =
   | 'routh-hurwitz'
   | 'torque-speed'
   | 'transformer-efficiency'
-  | 'step-response';
+  | 'step-response'
+  | 'pid-tuner';
 
 export type InstrumentCategory = 'control' | 'ac-power' | 'machines' | 'time-domain';
 

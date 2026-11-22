@@ -8,6 +8,12 @@ import {
   computeTorqueSpeed,
   computeTransformerEfficiency,
 } from '../math/machinesAndTime';
+import {
+  computePidRecommendations,
+  fitFopdtModel,
+  parseStepResponseCsv,
+  simulateClosedLoopPid,
+} from '../math/pidTuner';
 
 describe('Complex Polynomial Root Finder', () => {
   it('solves quadratic, cubic, and zero-deflated polynomials accurately (Blue Pill)', () => {
@@ -336,5 +342,122 @@ describe('Machines & Time-Domain Solvers', () => {
     expect(computeStepResponse({ zeta: -0.2, omegaN: 4, amplitude: 1 }).ok).toBe(false);
     // Zero natural frequency
     expect(computeStepResponse({ zeta: 0.5, omegaN: 0, amplitude: 1 }).ok).toBe(false);
+  });
+});
+
+describe('CSV Step ID & PID Auto-Tuner Solvers', () => {
+  it('parses 2-column and 3-column CSVs and recovers exact FOPDT parameters (Blue Pill)', () => {
+    // True FOPDT: y0 = 20, Kp = 4.0, tau = 3.5s, theta = 1.5s, step at t=1.0, du=2.0
+    const lines = ['t,y,u'];
+    for (let t = 0; t <= 22; t += 0.5) {
+      const u = t >= 1.0 ? 2.0 : 0.0;
+      const dt = t - 1.0 - 1.5;
+      const y = dt <= 0 ? 20 : 20 + 4.0 * 2.0 * (1 - Math.exp(-dt / 3.5));
+      lines.push(`${t},${y.toFixed(5)},${u}`);
+    }
+
+    const parsed = parseStepResponseCsv(lines.join('\n'));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(parsed.data.hasInputColumn).toBe(true);
+    expect(parsed.data.detectedDeltaU).toBeCloseTo(2.0, 5);
+
+    const fit = fitFopdtModel(parsed.data);
+    expect(fit.ok).toBe(true);
+    if (!fit.ok) return;
+
+    expect(fit.data.kp).toBeCloseTo(4.0, 1);
+    expect(fit.data.tau).toBeCloseTo(3.5, 1);
+    expect(fit.data.theta).toBeCloseTo(1.5, 1);
+    expect(fit.data.rSquared).toBeGreaterThan(0.99);
+
+    const recs = computePidRecommendations(fit.data);
+    expect(recs).toHaveLength(5);
+    const imc = recs.find((r) => r.id === 'imc')!;
+    const zn = recs.find((r) => r.id === 'zn')!;
+    expect(imc.kc).toBeGreaterThan(0);
+    expect(zn.kc).toBeGreaterThan(imc.kc); // ZN is more aggressive than default IMC
+
+    const sim = simulateClosedLoopPid({
+      model: fit.data,
+      kc: imc.kc,
+      ti: imc.ti,
+      td: imc.td,
+      setpointStep: 1.0,
+      disturbanceStep: -0.2,
+    });
+    expect(sim.ok).toBe(true);
+    if (sim.ok) {
+      expect(sim.data.isStable).toBe(true);
+      expect(sim.data.points.length).toBeGreaterThan(100);
+      expect(sim.data.iae).toBeGreaterThan(0);
+    }
+  });
+
+  it('supports reverse-acting negative-gain processes cleanly (Blue Pill)', () => {
+    const lines = ['t,temp'];
+    for (let t = 0; t <= 15; t += 0.5) {
+      const y = t <= 1 ? 50 : 50 - 6 * (1 - Math.exp(-(t - 1) / 2.5));
+      lines.push(`${t},${y.toFixed(4)}`);
+    }
+    const parsed = parseStepResponseCsv(lines.join('\n'), 1.0);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const fit = fitFopdtModel(parsed.data, 0.5, 1.0);
+    expect(fit.ok).toBe(true);
+    if (!fit.ok) return;
+
+    expect(fit.data.kp).toBeLessThan(0);
+    const recs = computePidRecommendations(fit.data);
+    expect(recs[0].kc).toBeLessThan(0); // Reverse-acting controller gain preserves negative feedback
+
+    const sim = simulateClosedLoopPid({
+      model: fit.data,
+      kc: recs[0].kc,
+      ti: recs[0].ti,
+      td: recs[0].td,
+      setpointStep: -1.0,
+      disturbanceStep: 0,
+    });
+    expect(sim.ok).toBe(true);
+    if (sim.ok) {
+      expect(sim.data.isStable).toBe(true);
+    }
+  });
+
+  it('rejects empty, non-monotonic, short, flat, or invalid PID inputs (Red Pill)', () => {
+    expect(parseStepResponseCsv('').ok).toBe(false);
+    expect(parseStepResponseCsv('t,y\n0,1\n1,2\n2,3').ok).toBe(false); // < 6 rows
+    expect(
+      parseStepResponseCsv('t,y\n0,1\n2,2\n1,3\n3,4\n4,5\n5,6').ok // non-increasing t
+    ).toBe(false);
+    expect(
+      parseStepResponseCsv('t,y\n0,1\n1,abc\n2,3\n3,4\n4,5\n5,6').ok // non-numeric
+    ).toBe(false);
+
+    const flatParsed = parseStepResponseCsv('t,y\n0,5\n1,5\n2,5\n3,5\n4,5\n5,5');
+    expect(flatParsed.ok).toBe(true);
+    if (flatParsed.ok) {
+      expect(fitFopdtModel(flatParsed.data).ok).toBe(false);
+    }
+
+    const validParsed = parseStepResponseCsv('t,y\n0,0\n1,1\n2,3\n3,5\n4,6\n5,6.5\n6,6.8');
+    if (validParsed.ok) {
+      const fit = fitFopdtModel(validParsed.data);
+      if (fit.ok) {
+        expect(
+          simulateClosedLoopPid({
+            model: fit.data,
+            kc: 1,
+            ti: 0, // invalid Ti <= 0
+            td: 0,
+            setpointStep: 1,
+            disturbanceStep: 0,
+          }).ok
+        ).toBe(false);
+      }
+    }
   });
 });

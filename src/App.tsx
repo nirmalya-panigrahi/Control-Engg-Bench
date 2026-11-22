@@ -3,6 +3,7 @@ import { Moon, RotateCcw, Sun } from 'lucide-react';
 import { AcPowerBench } from './components/instruments/AcPowerBench';
 import { FrequencyControlBench } from './components/instruments/FrequencyControlBench';
 import { MachinesTimeBench } from './components/instruments/MachinesTimeBench';
+import { PidTunerBench } from './components/instruments/PidTunerBench';
 import { SPlaneControlBench } from './components/instruments/SPlaneControlBench';
 import { INSTRUMENTS } from './data/instruments';
 import type { InstrumentCategory, InstrumentId } from './types/bench';
@@ -52,6 +53,8 @@ export default function App() {
       case 'transformer-efficiency':
       case 'step-response':
         return <MachinesTimeBench key={key} mode={activeId} />;
+      case 'pid-tuner':
+        return <PidTunerBench key={key} />;
     }
   };
 
@@ -121,7 +124,7 @@ export default function App() {
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
               <span>Electrical &amp; Control Engineering</span>
               <span aria-hidden="true">·</span>
-              <span>10 Calibrated Instruments</span>
+              <span>11 Calibrated Instruments</span>
               <span aria-hidden="true">·</span>
               <span className="font-mono">Hover or drag plots for fine-print coordinates</span>
             </div>
